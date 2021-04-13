@@ -35,7 +35,7 @@ plot(mumps_data$reports~mumps_data$time, type='l')
 
 Chapter 14 Notes:
 
-```{r pomp}
+```{r pomp, cache=FALSE}
 library(pomp)
 
 
@@ -52,7 +52,7 @@ H += dN_IR;
 sir_init <- Csnippet("
 S = nearbyint(eta*N);
 E = 0;
-I = 1;
+I = 200;
 H = 0;
 ")
 
@@ -65,8 +65,8 @@ reports = rbinom(H,rho);
 ")
 
 
-mumps_fixed_params <- c(N=9e6, mu_EI=21.28, mu_IR=52.14)
-params <- c(Beta=200, rho=0.8, eta=0.5, mumps_fixed_params)
+mumps_fixed_params <- c(N=9e6, mu_EI=36.28, mu_IR=35.14)
+params <- c(Beta=2e6, rho=0.75, eta=0.2, mumps_fixed_params)
 
 mumps_data %>%
 pomp(
@@ -93,7 +93,7 @@ pomp(
 
 Now, we'll do the actual fitting
 
-```{r local}
+```{r local, cache=FALSE}
 run_level <- 1
 mumps_Np <- switch(run_level, 100, 1e3, 5e3)
 mumps_Nmif <- switch(run_level, 10, 100, 200)
@@ -164,7 +164,7 @@ summary(r2$logLik, digits=5)
 ```
 
 
-```{r global}
+```{r global, cache=FALSE}
 mumps_box <- rbind(
   Beta=c(5, 5e6), eta=c(0, 0.4), rho=c(0.2, 0.9)
 )
