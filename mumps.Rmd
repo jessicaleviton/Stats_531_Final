@@ -1,0 +1,186 @@
+---
+title: "mumps"
+author: "Jessica Leviton"
+date: "4/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import}
+library(tidyverse)
+#mumps <- read.csv("mumps.csv", header=TRUE)
+
+read_csv("mumps.csv") %>%
+  select(week, state, reports=cases) -> mumps
+
+mumps$Year <- substr(mumps$week, 1, 4)
+mumps$weeknum <- substr(mumps$week, 5, 6)
+mumps$time <- as.numeric(mumps$Year) + as.numeric(mumps$weeknum)/52
+
+head(mumps)
+
+#mumps_MI <- mumps[mumps$state == 'MI',]
+mumps_MI <- subset(mumps, (state == 'MI'))
+mumps_MI_70 <- subset(mumps_MI, (time > 1970) & (time < 1973), select=c("time", "reports"))
+
+plot(mumps_MI_70$time)
+
+mumps_MI_70_t0 <- 1970+1/52
+tail(mumps_MI)
+head(mumps_MI_70)
+#length(mumps_MI_70$week)
+
+
+plot(mumps_MI_70$reports~mumps_MI_70$time, type='l')
+```
+
+Chapter 14 Notes:
+
+```{r pomp}
+library(pomp)
+
+#I_0 <- 
+
+sir_step <- Csnippet("
+double dN_SI = rbinom(S, 1-exp(-Beta*I/N*dt));
+double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
+S -= dN_SI;
+I += dN_SI - dN_IR;
+H += dN_IR;
+")
+
+sir_init <- Csnippet("
+S = nearbyint(eta*N);
+I = 81;
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dbinom(reports, H, rho, give_log);
+")
+
+rmeas <- Csnippet("
+reports = rbinom(H, rho);
+")
+
+params <- c(Beta=20, mu_IR=1, rho=0.5, eta=0.1, N=9e6)
+mumps_fixed_params <- c(N=9e6, mu_IR=1)
+
+mumps_MI_70 %>%
+pomp(
+  times="time",
+  obsnames="reports",
+  t0=mumps_MI_70_t0,
+  params=params,
+  rprocess=euler(sir_step, delta.t=1/52),
+  rinit=sir_init,
+  rmeasure=rmeas,
+  dmeasure=dmeas,
+  accumvars="H",
+  partrans=parameter_trans(
+    log=c("Beta"),
+    logit=c("rho", "eta")
+  ),
+  statenames=c("S", "I", "H"),
+  paramnames=c("Beta", "mu_IR", "eta", "rho", "N")
+) -> mumpSIR
+
+
+
+```
+
+Now, we'll do the actual fitting
+
+```{r local}
+run_level <- 1
+mumps_Np <- switch(run_level, 100, 1e3, 5e3)
+mumps_Nmif <- switch(run_level, 10, 100, 200)
+mumps_Nreps_eval <- switch(run_level, 2, 10, 20)
+mumps_Nreps_local <- switch(run_level, 10, 20, 40)
+mumps_Nreps_global <- switch(run_level, 10, 20, 100)
+mumps_Nsim <- switch(run_level, 50, 100, 500)
+
+library(foreach)
+library(doParallel)
+registerDoParallel()
+library(doRNG)
+registerDoRNG(3899882)
+
+#Testing work:
+# mumpSIR %>%
+#   pfilter(Np=mumps_Np, params=params) -> pf
+# 
+# plot(pf)
+
+mumps_rw.sd_rp <- 0.02
+mumps_rw.sd_ivp <- 0.2
+mumps_cooling.fraction.50 <- 0.5
+mumps_rw.sd <- rw.sd(
+  Beta=mumps_rw.sd_rp, eta=ivp(mumps_rw.sd_rp), rho=mumps_rw.sd_rp
+)
+
+stew(file="results/mif.rda", {
+  t2 <- system.time({
+    m2 <- foreach(i=1:mumps_Nreps_local,
+                  .packages='pomp', .combine=c) %dopar%
+      mif2(mumpSIR,
+           Np=mumps_Np,
+           Nmif=mumps_Nmif,
+           cooling.fraction.50=mumps_cooling.fraction.50,
+           rw.sd=mumps_rw.sd)
+    lik_m2 <- foreach(i=1:mumps_Nreps_local,
+                      .packages='pomp', .combine=rbind) %dopar%
+      logmeanexp(
+        replicate(mumps_Nreps_eval, logLik(
+          pfilter(mumpSIR, params=coef(m2[[i]]), Np=mumps_Np))),
+        se=TRUE)
+  })
+})
+
+logLik(pfilter(mumpSIR, params=coef(m2[[1]]), Np=mumps_Np))
+
+r2 <- data.frame(logLik=lik_m2[,1], logLik_se=lik_m2[,2],
+                 t(sapply(m2,coef)))
+
+r2
+summary(r2$logLik, digits=5)
+
+
+```
+
+
+```{r global}
+mumps_box <- rbind(
+  Beta=c(5, 5e4), eta=c(0, 0.4), rho=c(0.2, 0.9)
+)
+
+stew(file="results/box_eval.rda", {
+  time_start_box_eval <- Sys.time()
+  m3 <- foreach(i=1:mumps_Nreps_global, .packages='pomp',
+      .combine=c) %dopar% mif2(m2[[1]],
+      params=c(apply(mumps_box, 1, function(x)runif(1,x[1],x[2])),
+               mumps_fixed_params)
+      )
+  
+  lik_m3 <- foreach(i=1:mumps_Nreps_global, .packages='pomp',
+                    .combine=rbind) %dopar% logmeanexp(
+                      replicate(mumps_Nreps_eval,
+                                logLik(pfilter(mumpSIR,
+                                               params=coef(m3[[i]]), 
+                                               Np=mumps_Np))),
+                      se=TRUE)
+  time_end_box_eval <- Sys.time()
+})
+```
+
+Alright, cool. It looks like the "week" data is formated "YYYY##" where ## is the "number" of the week, ranging from 01 to 52.
+
+
+This link could have some useful general information, but you should also check CDC and other sites for mumps info: https://www.cdc.gov/mmwr/preview/mmwrhtml/mm5513a3.htm
+
+
+https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF
+According to michigan.gov, the population of Michigan only increased by about 2% from the year 1970 to the year 1974. I would argue that that's a small enough change that we can approximate the demographics as constant.
