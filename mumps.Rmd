@@ -47,6 +47,8 @@ library(pomp)
 
 # mumps_covar <- covariate_table(
 #   t=mumps_data$week,
+#   periodic.bspline.basis(t, nbasis=1,
+#                          degree=3, period=1, names="xi%d"),
 #   times="t"
 # )
 
@@ -86,7 +88,7 @@ cases = rnbinom(H, rho);
 mumps_data %>%
   pomp(
     times="week", t0=0,
-    rprocess=euler(seir_step, delta.t=1/7),
+    rprocess=euler(seir_step, delta.t=1/21),
     rinit=seir_init,
     rmeasure=rmeas,
     dmeasure=dmeas,
@@ -100,7 +102,7 @@ mumps_data %>%
   ) -> mumpSIR
 
 mumps_fixed_params <- c(N=8881826, mu_EI=0.412, mu_IR=0.714)
-params <- c(Beta=60, rho=0.8, eta=0.0216, mumps_fixed_params)
+params <- c(Beta=60, rho=0.8, eta=0.0216, b1=3, mumps_fixed_params)
 
 # params <- c(Beta=20, mu_EI=3.5, mu_IR=2, rho=0.5, eta=0.1, N=38000)
 # fixed_params <- c(N=38000, mu_IR=2)
@@ -125,11 +127,11 @@ library(doRNG)
 registerDoRNG(3899882)
 
 #Testing work:
-mumpSIR %>%
-  pfilter(Np=mumps_Np, params=params) -> pf
-
-logLik(pf)
-plot(pf)
+# mumpSIR %>%
+#   pfilter(Np=mumps_Np, params=params) -> pf
+# 
+# logLik(pf)
+# plot(pf)
 
 mumpSIR %>%
   simulate(params=params, nsim=10, format="data.frame", include.data=TRUE) -> y
