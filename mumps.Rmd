@@ -27,7 +27,7 @@ head(mumps)
 
 mumps_data = mumps %>%
   filter(state_name == "MICHIGAN") %>%
-  filter(week >= 197037 & week <= 197236) %>%
+  filter(week >= 197137 & week <= 197334) %>%
   select(cases) %>%
   mutate(week = 1:100) %>%
   relocate(week, cases)
@@ -45,6 +45,11 @@ Chapter 14 Notes:
 ```{r pomp, cache=FALSE}
 library(pomp)
 
+# mumps_covar <- covariate_table(
+#   t=mumps_data$week,
+#   times="t"
+# )
+
 seir_step <- Csnippet("
 double dN_SE = rbinom(S, 1-exp(-Beta*I/N*dt));
 double dN_EI = rbinom(E, 1-exp(-mu_EI*dt));
@@ -57,17 +62,25 @@ H += dN_IR;
 
 seir_init <- Csnippet("
 S = nearbyint(eta*N);
-E = 0;
-I = 1;
+E = 20;
+I = 10;
 H = 0;
 ")
 
+# dmeas <- Csnippet("
+# lik = dbinom(cases, H, rho, give_log);
+# ")
+
 dmeas <- Csnippet("
-lik = dbinom(cases, H, rho, give_log);
+lik = dnbinom(cases, H, rho, give_log);
 ")
 
+# rmeas <- Csnippet("
+# cases = rbinom(H, rho);
+# ")
+
 rmeas <- Csnippet("
-cases = rbinom(H, rho);
+cases = rnbinom(H, rho);
 ")
 
 mumps_data %>%
@@ -86,8 +99,8 @@ mumps_data %>%
     paramnames=c("Beta", "mu_EI", "mu_IR", "eta", "rho", "N")
   ) -> mumpSIR
 
-mumps_fixed_params <- c(N=9000000, mu_EI=3.5, mu_IR=1)
-params <- c(Beta=60, rho=0.5, eta=0.0416, mumps_fixed_params)
+mumps_fixed_params <- c(N=8881826, mu_EI=0.412, mu_IR=0.714)
+params <- c(Beta=60, rho=0.8, eta=0.0216, mumps_fixed_params)
 
 # params <- c(Beta=20, mu_EI=3.5, mu_IR=2, rho=0.5, eta=0.1, N=38000)
 # fixed_params <- c(N=38000, mu_IR=2)
@@ -96,7 +109,7 @@ params <- c(Beta=60, rho=0.5, eta=0.0416, mumps_fixed_params)
 
 Now, we'll do the actual fitting
 
-```{r local, cache=FALSE}
+```{r local, cache=FALSE, echo=FALSE}
 run_level <- 2
 mumps_Np <- switch(run_level, 100, 1e3, 5e3)
 mumps_Nmif <- switch(run_level, 10, 100, 200)
@@ -156,6 +169,7 @@ lik_local
 r_local <- data.frame(logLik=lik_local[,1], logLik_se=lik_local[,2],
                       t(sapply(mifs_local, coef)))
 
+r_local
 summary(r_local$logLik, digits=5)
 
 # mifs_local %>% logLik() %>% logmeanexp(se=TRUE) -> L_pf
@@ -176,7 +190,7 @@ mifs_local %>%
 
 
 mumps_box <- rbind(
-  Beta=c(5,5e6), eta=c(0,0.60), rho=c(0, 0.9)
+  Beta=c(5,80), eta=c(0,0.10), rho=c(0, 0.9)
 )
 
 mifs_global <- foreach(i=1:mumps_Nreps_global, .packages='pomp', 
@@ -195,7 +209,26 @@ lik_global <- foreach(i=1:mumps_Nreps_global, .packages='pomp',
 r_global <- data.frame(logLik=lik_global[,1], logLik_se=lik_global[,2],
                        t(sapply(mifs_global, coef)))
 
+r_global <- r_global[order(-r_global$logLik),]
+r_global
 summary(r_global$logLik, digits=5)
+```
+```{r fit_sim}
+fit_params <- r_global[1,]
+fit_params$Beta
+
+best_params <- c(Beta=fit_params$Beta, rho=fit_params$rho, eta=fit_params$eta, mumps_fixed_params)
+
+mumpSIR %>%
+  simulate(params=best_params, nsim=1, format="data.frame", include.data=TRUE) -> y
+y
+
+y %>%
+  ggplot(aes(x=week, y=cases, group=.id, color=factor(.id)))+
+  geom_line()+
+ # ylim(0,100)+
+  scale_color_brewer(type="qual", palette=3)+
+  guides(color=FALSE)
 ```
 
 Alright, cool. It looks like the "week" data is formated "YYYY##" where ## is the "number" of the week, ranging from 01 to 52.
