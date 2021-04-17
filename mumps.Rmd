@@ -53,6 +53,8 @@ library(pomp)
 # )
 
 seir_step <- Csnippet("
+double Beta;
+Beta = exp(b1 + b2 * cos(M_2PI/52*t - Phi));
 double dN_SE = rbinom(S, 1-exp(-Beta*I/N*dt));
 double dN_EI = rbinom(E, 1-exp(-mu_EI*dt));
 double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
@@ -88,21 +90,21 @@ cases = rnbinom(H, rho);
 mumps_data %>%
   pomp(
     times="week", t0=0,
-    rprocess=euler(seir_step, delta.t=1/21),
+    rprocess=euler(seir_step, delta.t=1/7),
     rinit=seir_init,
     rmeasure=rmeas,
     dmeasure=dmeas,
     accumvars="H",
     partrans=parameter_trans(
-      log=c("Beta", "mu_EI"),
+      #log=c("Beta", "mu_EI"),
       logit=c("rho", "eta")
     ),
     statenames=c("S", "E", "I", "H"),
-    paramnames=c("Beta", "mu_EI", "mu_IR", "eta", "rho", "N")
+    paramnames=c("b1", "b2", "Phi", "mu_EI", "mu_IR", "eta", "rho", "N")
   ) -> mumpSIR
 
 mumps_fixed_params <- c(N=8881826, mu_EI=0.412, mu_IR=0.714)
-params <- c(Beta=60, rho=0.8, eta=0.0216, b1=3, mumps_fixed_params)
+params <- c(b1=1, b2=1, Phi=0.1, rho=0.8, eta=0.0216, mumps_fixed_params)
 
 # params <- c(Beta=20, mu_EI=3.5, mu_IR=2, rho=0.5, eta=0.1, N=38000)
 # fixed_params <- c(N=38000, mu_IR=2)
@@ -153,7 +155,7 @@ foreach(i=1:mumps_Nreps_local,.combine=c) %dopar% {
       params=params,
       Np=mumps_Np, Nmif=mumps_Nmif,
       cooling.fraction.50=0.5,
-      rw.sd=rw.sd(Beta=0.02, rho=0.02, eta=ivp(0.02))
+      rw.sd=rw.sd(b1=0.02, b2=0.02, Phi=0.02, rho=0.02, eta=ivp(0.02))
     )
 } -> mifs_local
 
@@ -192,7 +194,7 @@ mifs_local %>%
 
 
 mumps_box <- rbind(
-  Beta=c(5,80), eta=c(0,0.10), rho=c(0, 0.9)
+  b1=c(0,5), b2=c(0,5), Phi=c(0, 2*pi), eta=c(0,0.10), rho=c(0, 0.9)
 )
 
 mifs_global <- foreach(i=1:mumps_Nreps_global, .packages='pomp', 
@@ -217,9 +219,10 @@ summary(r_global$logLik, digits=5)
 ```
 ```{r fit_sim}
 fit_params <- r_global[1,]
-fit_params$Beta
+fit_params$b1
 
-best_params <- c(Beta=fit_params$Beta, rho=fit_params$rho, eta=fit_params$eta, mumps_fixed_params)
+best_params <- c(b1=fit_params$b1, b2=fit_params$b2, Phi=fit_params$Phi,
+                 rho=fit_params$rho, eta=fit_params$eta, mumps_fixed_params)
 
 mumpSIR %>%
   simulate(params=best_params, nsim=1, format="data.frame", include.data=TRUE) -> y
@@ -246,3 +249,4 @@ vaccination rate info: https://www.statista.com/statistics/385577/mmr-vaccinatio
 
 better vaccination rate info: https://www.cdc.gov/vaccines/pubs/pinkbook/downloads/appendices/g/coverage.pdf
 
+https://kingaa.github.io/pomp/vignettes/oaxaca.html
