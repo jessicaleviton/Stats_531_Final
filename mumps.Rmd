@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r import}
+```{r import, echo=FALSE, results=FALSE}
 library(tidyverse)
 
 read_csv("mumps.csv") %>%
@@ -39,6 +39,22 @@ mumps_data_t0 <- 0
 
 plot(mumps_data$cases~mumps_data$week, type='l')
 ```
+
+Mumps is a virus that was once a common cause of childhood hearing loss and one of the leading causes of military hospitalizations in the United States [SOURCE: CDC]. Following the licensing of the measles, mumps, and rubella (MMR) vaccine in 1971 and a successful national 2 dose vaccination program, the U.S. saw a 99% reduction in cases. [STILL CDC]
+
+In this report, we examine whether mumps cases in the 1970s can be well modeled by an SEIR pomp model. We used data from Project Tycho, which collects infections disease data to be used for research purposes. We used weekly mumps reporting data from Michigan from September 1971 to September 1973.
+
+Our model consists of 4 compartments, representing the Susceptible (S), those in a latency period (E), the Infected (I), and those that have Recovered (R) from the disease. Taking the simplest case by ignoring demography, we can compute the number of people in each compartment with the following fomulas:
+
+$$
+S(t) = S(0) - N_{SE}(t)
+\\
+E(t) = E(0) + N_{SE}(t) - N_{EI}(t)
+\\
+I(t) = I(0)
+\\
+R(t) = R(0) + N_{IR}(t)
+$$
 
 Chapter 14 Notes:
 
