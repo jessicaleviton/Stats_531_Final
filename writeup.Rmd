@@ -1,0 +1,465 @@
+---
+title: "Stats 531, W21, Final Project"
+author:
+  - Jessica Leviton, leviton@umich.edu
+  - Hongfan Chen, chenhf@umich.edu
+date: "`r format.Date(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    code_folding: hide
+    theme: journal
+    highlight: pygments
+    includes:
+      in_header: header.html
+---
+
+```{css, include = TRUE, echo = FALSE}
+body{ /* Normal */
+  font-size: 14.5px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, echo = TRUE)
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(pomp)
+  library(doParallel)
+  library(doRNG)
+})
+```
+
+## Introduction 
+
+Mumps is a virus that was once a common cause of childhood hearing loss and one of the leading causes of military hospitalizations in the United States. Following the licensing of the measles, mumps, and rubella (MMR) vaccine in 1971 and a successful national 2 dose vaccination program, the U.S. saw a 99% reduction in cases, according to [CDC](https://www.cdc.gov/vaccines/pubs/pinkbook/mumps.html]).
+
+```{r mumps_logo, fig.align = 'center', fig.cap = cap_fig1}
+# directories: ----------------------------------------------------------------
+path = './'
+## Figure 1
+cap_fig1 = paste(
+  "**Figure 1.** *Symptoms of Mumps.*"
+)
+mumps_LOGO = sprintf('%s/mumps.jpg', path)
+knitr::include_graphics(mumps_LOGO)
+```
+
+So in this report, we are trying to find the transmission pattern of mumps in the *1970s*, and specifically, we want to examine the following question:
+
+>  Whether or not mumps cases in the 1970s can be well modeled by an SEIR pomp model?
+
+### Data Description
+
+Our data is from [Project Tycho](https://www.kaggle.com/pitt/contagious-diseases), which collects infections disease data to be used for research purposes. In this project, we focused on weekly mumps reporting data from Michigan from *September 1971* to *September 1973*.
+  
+Three useful variables are listed below:
+
+- `week` is the index variable and takes week as a unit of measurement of time.
+- `cases` record the overall reporting cases.
+- `state_name` is the state where cases are reported.
+
+## Analysis
+
+### Exploratory Data Analysis
+
+We plot the time series first to have an overview of the data. There are two waves in the data, as we can see. So if we are going to model such a time series with the simple SIR model that we learned from class, it would be inappropriate because here the `Susceptible` would eventually deplete, so at last there's no one left to be infected anymore, and such a model can fail. Also, the contact rate $\beta$ is time invariant, which also indicates that simple SIR tends to be only useful when the data is unimodal.
+
+```{r import, warning=FALSE, message=FALSE}
+# data: -----------------------------------------------------------------------
+## Project Tycho: Contagious Diseases
+## mumps data
+mumps_file = sprintf('%s/mumps.csv', path)
+mumps = read_delim(mumps_file, delim = ',' ) %>%
+  select(week, state, state_name, cases)
+
+mumps_data = mumps %>%
+  filter(state_name == "MICHIGAN") %>%
+  filter(week >= 197137 & week <= 197334) %>%
+  select(cases) %>%
+  mutate(week = 1:100) %>%
+  relocate(week, cases)
+```
+
+```{r mumps_plot, fig.cap=cap_fig2}
+cap_fig2 = paste(
+  "**Figure 2.** *Mumps reporting data from Michigan by weeks.*",
+   "The data is from September 1971 to September 1973."
+)
+
+mumps_data %>%
+  ggplot(aes(x = week, y = cases))+
+  geom_line(col = "tomato3")
+```
+
+### SEIR model with seasonal contact rate
+
+In order to capture such seasonality and periodicity, we may consider a SEIR model with a seasonal contact rate $\beta$, since the Susceptible is rather constant in such a short time(2 years).
+
+```{r SEIR_logo, fig.align = 'center', fig.cap = cap_fig3}
+cap_fig3 = paste(
+  "**Figure 3.** *SEIR model with four compartments.*"
+)
+SEIR_LOGO = sprintf('%s/SEIR.jpg', path)
+knitr::include_graphics(SEIR_LOGO)
+```
+
+
+Our model consists of 4 compartments, representing the Susceptible (**S**), Exposed(**E**) individuals (*those who have been infected but are not yet infectious*), the Infected (**I**), and those that have Recovered (**R**) from the disease.
+
+According to Michigan [government](https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF), the population of Michigan only increased by about 2% from the year 1970 to the year 1974. We would argue that that's a change small enough that we can approximate the demographics as constant.
+
+So taking the simplest case by ignoring demography, we can compute the number of people in each compartment with the following formulas:
+
+\begin{equation}
+\begin{split}
+S(t) &= S(0) - N_{SE}(t) \\
+E(t) &= E(0) + N_{SE}(t) - N_{EI}(t) \\
+I(t) &= I(0) + N_{EI}(t) - N_{IR}(t) \\
+R(t) &= R(0) + N_{IR}(t)
+\end{split}
+\end{equation}
+
+And as we pointed out, contact rate have to be varied with time, which means that
+$$\beta = \exp\left\{b_{2}cos\left(\frac{2\pi t}{52}-\phi\right)+b_{1}\right\}$$
+Here number **52** represent the 52 weeks in a year, and $\phi$ is the original phase, $b_{2}$ is usually called the amplitude, while $b_{1}$ is a constant indicating the mean level of contact rate.
+
+## Implementation
+
+### Building the model
+
+So based on the above assumptions, now we can do the actual fitting. For the detailed implementation of our model, please click the below button.
+
+<details>
+ <summary> `Model Details` </summary>
+```
+## SEIR mode: -----------------------------------------------------------------
+seir_step <- Csnippet("
+double Beta;
+Beta = exp(b1 + b2 * cos(M_2PI/52*t - Phi));
+double dN_SE = rbinom(S, 1-exp(-Beta*I/N*dt));
+double dN_EI = rbinom(E, 1-exp(-mu_EI*dt));
+double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
+S -= dN_SE;
+E += dN_SE - dN_EI;
+I += dN_EI - dN_IR;
+H += dN_IR;
+")
+
+seir_init <- Csnippet("
+S = nearbyint(eta*N);
+E = 20;
+I = 10;
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dnbinom(cases, H, rho, give_log);
+")
+
+rmeas <- Csnippet("
+cases = rnbinom(H, rho);
+")
+
+mumpSEIR = mumps_data %>%
+  pomp(
+    times = "week",
+    t0 = 0,
+    rprocess = euler(seir_step, delta.t=1/7),
+    rinit = seir_init,
+    rmeasure = rmeas,
+    dmeasure = dmeas,
+    accumvars = "H",
+    partrans = parameter_trans(
+      logit = c("rho", "eta")
+    ),
+    statenames = c("S", "E", "I", "H"),
+    paramnames = c("b1", "b2", "Phi", "mu_EI",
+                   "mu_IR", "eta", "rho", "N"),
+    cdir = "./",
+    cfile = "mumpSEIR"
+  )
+```
+</details>
+
+```{r SEIR_MOD, message=FALSE, warning=FALSE}
+## SEIR mode: -----------------------------------------------------------------
+seir_step <- Csnippet("
+double Beta;
+Beta = exp(b1 + b2 * cos(M_2PI/52*t - Phi));
+double dN_SE = rbinom(S, 1-exp(-Beta*I/N*dt));
+double dN_EI = rbinom(E, 1-exp(-mu_EI*dt));
+double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
+S -= dN_SE;
+E += dN_SE - dN_EI;
+I += dN_EI - dN_IR;
+H += dN_IR;
+")
+
+seir_init <- Csnippet("
+S = nearbyint(eta*N);
+E = 20;
+I = 10;
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dnbinom(cases, H, rho, give_log);
+")
+
+rmeas <- Csnippet("
+cases = rnbinom(H, rho);
+")
+
+mumpSEIR = mumps_data %>%
+  pomp(
+    times = "week",
+    t0 = 0,
+    rprocess = euler(seir_step, delta.t=1/7),
+    rinit = seir_init,
+    rmeasure = rmeas,
+    dmeasure = dmeas,
+    accumvars = "H",
+    partrans = parameter_trans(
+      logit = c("rho", "eta")
+    ),
+    statenames = c("S", "E", "I", "H"),
+    paramnames = c("b1", "b2", "Phi", "mu_EI",
+                   "mu_IR", "eta", "rho", "N"),
+    cdir = "./",
+    cfile = "mumpSEIR"
+  )
+
+mumps_fixed_params = c(N = 8881826, mu_EI = 0.412, mu_IR = 0.714)
+
+params = c(b1 = 1, b2 = 1, Phi = 0.1,
+           rho = 0.8, eta = 0.0216,
+           mumps_fixed_params)
+
+y = mumpSEIR %>%
+  simulate(params = params,
+           nsim = 10,
+           format = "data.frame",
+           include.data = TRUE)
+```
+
+We choose starting value to be $$b_{1} = 1, b_{2} = 1, \phi = 0.1, \rho = 0.8, \eta = 0.0216, N= 8881826, \mu_{EI} = 0.412, \mu_{IR} = 0.714$$
+
+The starting value is randomly selected to examine the feasibility of our model. Below we plot ten times simulation of SEIR model, along with the original time series. We see that the fit is really poor, this might be caused by a bad choice of parameters.
+
+So we now continue our investigation by iterated filtering and find the best parameters by maximizing the likelihood function.
+
+```{r fit_1, fig.cap = cap_fig4, message=FALSE, warning=FALSE}
+cap_fig4 = paste( 
+  "**Figure 4.** *10 times simulated data(red) of SEIR model vs original time series(blue).*",
+  "Starting value is randomly selected."
+)
+
+y %>%
+  ggplot(aes(x = week, y = cases,
+             group = .id, color = .id=="data")
+  ) +
+  geom_line() +
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
+```
+
+### Likelihood-based inference
+
+#### Local maximization of likelihood {.tabset .tabset-fade .tabset-pills}
+
+Let’s carry out a local search using `mif2` around our starting point in parameter space.
+We need to choose the `rw.sd` and `cooling.fraction.50` algorithmic parameters.
+
+We’ll use a perturbation size of 0.02, since the parameter $\beta$ now is varied on a small scale, and so do the other parameters.This amount of perturbation can have a small but non-negligible effect on our filtering, which can smooth the likelihood function and can help to converge.
+
+The `cooling.fraction.50` is fixed to be 0.5, so that after 50 `mif2` iterations, the perturbations are reduced to half their original magnitudes.
+
+```{r computational intensity, message=FALSE, warning=FALSE}
+run_level = 2
+mumps_Np = switch(run_level, 100, 1e3, 5e3)
+mumps_Nmif = switch(run_level, 10, 100, 200)
+mumps_Nreps_eval = switch(run_level, 2, 10, 20)
+mumps_Nreps_local = switch(run_level, 10, 20, 40)
+mumps_Nreps_global = switch(run_level, 10, 20, 100)
+mumps_Nsim = switch(run_level, 50, 100, 500)
+```
+
+```{r local_search, message=FALSE, warning=FALSE}
+cl = makeCluster(8)
+registerDoParallel(cl)
+registerDoRNG(3899882)
+mifs_local = foreach(i = 1:mumps_Nreps_local,
+                     .packages = c("pomp", "tidyverse"),
+                     .combine = c) %dopar% { 
+  mumpSEIR %>%
+    mif2(
+      params = params,
+      Np = mumps_Np, 
+      Nmif = mumps_Nmif,
+      cooling.fraction.50 = 0.5,
+      rw.sd = rw.sd(b1 = 0.02, b2 = 0.02, Phi = 0.02,
+                    rho = 0.02, eta = ivp(0.02)
+                    )
+    )
+}
+stopCluster(cl)
+
+cl = makeCluster(8)
+registerDoParallel(cl)
+lik_local = foreach(i = 1:mumps_Nreps_local,
+                     .packages = c("pomp", "tidyverse"),
+                     .combine=rbind) %dopar% {
+  logmeanexp(
+    replicate(mumps_Nreps_eval,
+              logLik(pfilter(mumpSEIR,
+                             params =  coef(mifs_local[[i]]),
+                             Np = mumps_Np)
+                     )
+              ),
+    se = TRUE)
+}
+stopCluster(cl)
+```
+
+Here's our results, we show them in the table and plot the figure below.
+
+##### Table
+
+```{r local_tab, message=FALSE, warning=FALSE}
+r_local = t(sapply(mifs_local, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_local[,1],
+                   logLik_se = lik_local[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  head(10)
+cap_tab1 = paste( 
+  "**Table 1.** *Parameters of top ten models of local maximization of likelihood function.*",
+  "Observations are ordered by Log likelihood."
+)
+r_local %>%
+  knitr::kable(digits = 3,
+               caption = cap_tab1)
+```
+
+##### Figure
+
+```{r local_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig5}
+cap_fig5 = paste( 
+  "**Figure 5.** *Values of parameters corresponding to each local iteration*",
+  "Starting value is randomly selected."
+)
+
+mifs_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x = iteration,
+             y = value,
+             group = L1,
+             color = factor(L1)
+             )
+         )+
+  geom_line()+
+  guides(color = FALSE)+
+  facet_wrap(~variable,
+             scales = "free_y")
+```
+
+#### Global maximization of likelihood {.tabset .tabset-fade .tabset-pills}
+
+```{r global_search}
+mumps_box = rbind(
+  b1 = c(0,5), b2 = c(0,5), Phi = c(0, 2*pi),
+  eta = c(0,0.10), rho = c(0, 0.9)
+)
+
+cl = makeCluster(8)
+registerDoParallel(cl)
+mifs_global = foreach(i = 1:mumps_Nreps_global,
+                       .packages = 'pomp', 
+                       .combine = c) %dopar%{
+  mif2(mifs_local[[1]],
+       params = c(apply(mumps_box,
+                        1,
+                        function(x) runif(1, x[1], x[2])),
+                  mumps_fixed_params
+                  )
+       )
+}
+stopCluster(cl)
+
+cl = makeCluster(8)
+registerDoParallel(cl)
+lik_global = foreach(i = 1:mumps_Nreps_global,
+                     .packages = 'pomp',
+                     .combine = rbind) %dopar% {
+  logmeanexp(
+    replicate(mumps_Nreps_eval, 
+              logLik(pfilter(mumpSEIR,
+                             params = coef(mifs_global[[i]]),
+                             Np = mumps_Np)
+                     )
+              ),
+    se = TRUE
+    )
+}
+stopCluster(cl)
+```
+
+##### Table
+
+```{r global_tab, message=FALSE, warning=FALSE}
+r_global = t(sapply(mifs_global, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_global[,1],
+                   logLik_se = lik_global[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  head(10)
+cap_tab2 = paste( 
+  "**Table 2.** *Parameters of top ten models of global maximization of likelihood function.*",
+  "Observations are ordered by Log likelihood."
+)
+r_global %>%
+  knitr::kable(digits = 3,
+               caption = cap_tab2)
+```
+
+##### Figure
+
+```{r global_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig6}
+cap_fig6 = paste( 
+  "**Figure 6.** *Values of parameters corresponding to each global iteration*",
+  "Starting value is randomly selected."
+)
+
+mifs_global %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x = iteration,
+             y = value,
+             group = L1,
+             color = factor(L1)
+  )
+  )+
+  geom_line()+
+  guides(color = FALSE)+
+  facet_wrap(~variable,
+             scales = "free_y")
+```
+
+This link could have some useful general information, but you should also check CDC and other sites for mumps info: https://www.cdc.gov/mmwr/preview/mmwrhtml/mm5513a3.htm
+
+
+https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF
+According to michigan.gov, the population of Michigan only increased by about 2% from the year 1970 to the year 1974. I would argue that that's a small enough change that we can approximate the demographics as constant.
+
+vaccination rate info: https://www.statista.com/statistics/385577/mmr-vaccination-rate-among-us-children-aged-19-35-months/
+
+better vaccination rate info: https://www.cdc.gov/vaccines/pubs/pinkbook/downloads/appendices/g/coverage.pdf
+
+https://kingaa.github.io/pomp/vignettes/oaxaca.html
