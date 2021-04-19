@@ -79,8 +79,8 @@ mumpSEIR = mumps_data %>%
 
 mumps_fixed_params = c(N = 8881826, mu_EI = 0.412, mu_IR = 0.714)
 
-params = c(b1 = 3.3, b2 = 0.7, Phi = 1.5,
-           rho = 0.1, eta = 0.0216,
+params = c(b1 = 1, b2 = 1, Phi = 0.1,
+           rho = 0.8, eta = 0.0216,
            mumps_fixed_params)
 
 y = mumpSEIR %>%
@@ -89,8 +89,6 @@ y = mumpSEIR %>%
            format = "data.frame",
            include.data = TRUE)
 
-colors = c("FALSE" = "tomato2",
-           "TRUE" = "dodgerblue")
 y %>%
   ggplot(aes(x = week, y = cases,
              group = .id, color = .id=="data")
@@ -101,12 +99,12 @@ y %>%
        color = "Original Data")
 
 run_level = 2
-mumps_Np = switch(run_level, 100, 1e3, 5e3)
-mumps_Nmif = switch(run_level, 10, 100, 200)
+mumps_Np = switch(run_level, 100, 1e3, 2e3)
+mumps_Nmif = switch(run_level, 10, 100, 150)
 mumps_Nreps_eval = switch(run_level, 2, 10, 20)
-mumps_Nreps_local = switch(run_level, 10, 20, 40)
-mumps_Nreps_global = switch(run_level, 10, 20, 100)
-mumps_Nsim = switch(run_level, 50, 100, 500)
+mumps_Nreps_local = switch(run_level, 10, 30, 40)
+mumps_Nreps_global = switch(run_level, 10, 60, 100)
+mumps_Nsim = switch(run_level, 50, 70, 100)
 
 cl = makeCluster(8)
 registerDoParallel(cl)
@@ -165,6 +163,32 @@ mifs_local %>%
   facet_wrap(~variable,
              scales = "free_y")
 
+params_name = c("b1", "b2", "Phi", "rho", "eta")
+local_params = r_local[1,]
+best_local = unlist(c(local_params[params_name], mumps_fixed_params))
+
+set.seed(2021531)
+mod_local = mumpSEIR %>%
+  simulate(params = best_local,
+           nsim = 1,
+           format = "data.frame",
+           include.data = TRUE)
+
+
+mod_local %>%
+  ggplot(aes(x = week,
+             y = cases,
+             group = .id,
+             color = factor(.id)
+  )
+  ) +
+  geom_line() +
+  scale_color_brewer(type = "qual",
+                     palette = 6
+  )+
+  guides(color = FALSE)
+
+
 mumps_box = rbind(
   b1 = c(0,5), b2 = c(0,5), Phi = c(0, 2*pi),
   eta = c(0,0.10), rho = c(0, 0.9)
@@ -172,6 +196,7 @@ mumps_box = rbind(
 
 cl = makeCluster(8)
 registerDoParallel(cl)
+registerDoRNG(2021531)
 mifs_global = foreach(i = 1:mumps_Nreps_global,
                        .packages = 'pomp', 
                        .combine = c) %dopar%{
@@ -210,6 +235,9 @@ r_global = t(sapply(mifs_global, coef)) %>%
   arrange(-logLik) %>%
   head(10)
 
+pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
+       data = r_global, pch = 16)
+
 mifs_global %>%
   traces() %>%
   melt() %>%
@@ -225,28 +253,23 @@ mifs_global %>%
              scales = "free_y")
 
 
-fit_params = r_global[1,]
+global_params = r_global[1,]
+best_global = unlist(c(global_params[params_name], mumps_fixed_params))
+set.seed(2021531)
 
-params_name = c("b1", "b2", "Phi", "rho", "eta")
-best_params = unlist(c(fit_params[params_name], mumps_fixed_params))
-
-
-mod = mumpSEIR %>%
-  simulate(params = best_params,
+mod_global = mumpSEIR %>%
+  simulate(params = best_global,
            nsim = 1,
            format = "data.frame",
            include.data = TRUE)
 
-
-mod %>%
+mod_global %>%
   ggplot(aes(x = week,
              y = cases,
              group = .id,
-             color = factor(.id)
-             )
-         ) +
+             color = .id=="data")
+  ) +
   geom_line() +
-  scale_color_brewer(type = "qual",
-                     palette = 6
-                     )+
-  guides(color = FALSE)
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
