@@ -36,7 +36,7 @@ suppressPackageStartupMessages({
 
 [Mumps](#ref)$^{[1]}$ is a virus that was once a common cause of childhood hearing loss and one of the leading causes of military hospitalizations in the United States. Following the licensing of the measles, mumps, and rubella (MMR) vaccine in 1971 and a successful national 2 dose vaccination program, the U.S. saw a 99% reduction in cases, according to [CDC](#ref)$^{[2]}$.
 
-```{r mumps_logo, fig.align = 'center', fig.cap = cap_fig1}
+```{r mumps_logo, fig.align = 'center', fig.cap = cap_fig1, out.width="80%"}
 # directories: ----------------------------------------------------------------
 path = './'
 ## Figure 1
