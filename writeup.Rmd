@@ -290,10 +290,11 @@ mumps_Nsim = switch(run_level, 50, 70, 100)
 ```
 
 ```{r local_search, message=FALSE, warning=FALSE}
-registerDoParallel()
-registerDoRNG(2021531)
+
 
 stew('results/local.rda', {
+  registerDoParallel()
+  registerDoRNG(2021531)
   mifs_local = foreach(i = 1:mumps_Nreps_local,
                       .packages = c("pomp", "tidyverse"),
                       .combine = c) %dopar% { 
@@ -309,6 +310,8 @@ stew('results/local.rda', {
       )
   }
 
+  registerDoParallel()
+  registerDoRNG(2021531)
   lik_local = foreach(i = 1:mumps_Nreps_local,
                       .packages = c("pomp", "tidyverse"),
                       .combine=rbind) %dopar% {
@@ -437,10 +440,9 @@ mumps_box = rbind(
   eta = c(0,0.10), rho = c(0, 0.9)
 )
 
-
-registerDoParallel()
-registerDoRNG(2021531)
 stew('results/global.rda', {
+  registerDoParallel()
+  registerDoRNG(2021531)
   mifs_global = foreach(i = 1:mumps_Nreps_global,
                         .packages = 'pomp', 
                         .combine = c) %dopar%{
@@ -452,7 +454,9 @@ stew('results/global.rda', {
                    )
         )
   }
-
+  
+  registerDoParallel()
+  registerDoRNG(2021531)
   lik_global = foreach(i = 1:mumps_Nreps_global,
                       .packages = 'pomp',
                       .combine = rbind) %dopar% {

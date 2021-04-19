@@ -1,6 +1,6 @@
 /* pomp C snippet file: mumpSEIR */
-/* Time: 2021-04-19 13:07:14.958 -0400 */
-/* Salt: B7A21392177CE9B57AE8C285 */
+/* Time: 2021-04-19 14:08:25.639 -0400 */
+/* Salt: 693E96D9D1AEC1EAEA0AAA30 */
 
 #include <pomp.h>
 #include <R_ext/Rdynload.h>
