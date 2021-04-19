@@ -34,7 +34,7 @@ suppressPackageStartupMessages({
 
 ## Introduction 
 
-Mumps is a virus that was once a common cause of childhood hearing loss and one of the leading causes of military hospitalizations in the United States. Following the licensing of the measles, mumps, and rubella (MMR) vaccine in 1971 and a successful national 2 dose vaccination program, the U.S. saw a 99% reduction in cases, according to [CDC](https://www.cdc.gov/vaccines/pubs/pinkbook/mumps.html]).
+[Mumps](#ref)$^{[1]}$ is a virus that was once a common cause of childhood hearing loss and one of the leading causes of military hospitalizations in the United States. Following the licensing of the measles, mumps, and rubella (MMR) vaccine in 1971 and a successful national 2 dose vaccination program, the U.S. saw a 99% reduction in cases, according to [CDC](#ref)$^{[2]}$.
 
 ```{r mumps_logo, fig.align = 'center', fig.cap = cap_fig1}
 # directories: ----------------------------------------------------------------
@@ -53,7 +53,7 @@ So in this report, we are trying to find the transmission pattern of mumps in th
 
 ### Data Description
 
-Our data is from [Project Tycho](https://www.kaggle.com/pitt/contagious-diseases), which collects infections disease data to be used for research purposes. In this project, we focused on weekly mumps reporting data from Michigan from *September 1971* to *September 1973*.
+Our data is from [Project Tycho](#ref)$^{[3]}$, which collects infections disease data to be used for research purposes. In this project, we focused on weekly mumps reporting data from Michigan from *September 1971* to *September 1973*.
   
 Three useful variables are listed below:
 
@@ -96,7 +96,7 @@ mumps_data %>%
 
 ### SEIR model with seasonal contact rate
 
-In order to capture such seasonality and periodicity, we may consider a SEIR model with a seasonal contact rate $\beta$, since the Susceptible is rather constant in such a short time(2 years).
+In order to capture such seasonality and periodicity, we may consider a SEIR model with a seasonal contact rate $\beta$, since the Susceptible is rather constant in such a short time(2 years), and around 1971 there was a big vaccine [push](#ref)$^{[4][5]}$.
 
 ```{r SEIR_logo, fig.align = 'center', fig.cap = cap_fig3}
 cap_fig3 = paste(
@@ -109,7 +109,7 @@ knitr::include_graphics(SEIR_LOGO)
 
 Our model consists of 4 compartments, representing the Susceptible (**S**), Exposed(**E**) individuals (*those who have been infected but are not yet infectious*), the Infected (**I**), and those that have Recovered (**R**) from the disease.
 
-According to Michigan [government](https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF), the population of Michigan only increased by about 2% from the year 1970 to the year 1974. We would argue that that's a change small enough that we can approximate the demographics as constant.
+According to Michigan [government](#ref)$^{[6]}$, the population of Michigan only increased by about 2% from the year 1970 to the year 1974. We would argue that that's a change small enough that we can approximate the demographics as constant.
 
 So taking the simplest case by ignoring demography, we can compute the number of people in each compartment with the following formulas:
 
@@ -130,7 +130,7 @@ Here number **52** represent the 52 weeks in a year, and $\phi$ is the original 
 
 ### Building the model
 
-So based on the above assumptions, now we can do the actual fitting. For the detailed implementation of our model, please click the below button.
+So based on the above assumptions, now we can do the actual fitting. For the detailed implementation of our model, please click the button below.
 
 <details>
  <summary> `Model Details` </summary>
@@ -245,7 +245,8 @@ y = mumpSEIR %>%
            include.data = TRUE)
 ```
 
-We choose starting value to be $$b_{1} = 1, b_{2} = 1, \phi = 0.1, \rho = 0.8, \eta = 0.0216, N= 8881826, \mu_{EI} = 0.412, \mu_{IR} = 0.714$$
+We choose starting value to be
+$$b_{1} = 1, b_{2} = 1, \phi = 0.1, \rho = 0.8, \eta = 0.0216, N= 8881826, \mu_{EI} = 0.412, \mu_{IR} = 0.714$$
 
 The starting value is randomly selected to examine the feasibility of our model. Below we plot ten times simulation of SEIR model, along with the original time series. We see that the fit is really poor, this might be caused by a bad choice of parameters.
 
@@ -280,18 +281,18 @@ The `cooling.fraction.50` is fixed to be 0.5, so that after 50 `mif2` iterations
 
 ```{r computational intensity, message=FALSE, warning=FALSE}
 run_level = 2
-mumps_Np = switch(run_level, 100, 1e3, 5e3)
-mumps_Nmif = switch(run_level, 10, 100, 200)
+mumps_Np = switch(run_level, 100, 1e3, 2e3)
+mumps_Nmif = switch(run_level, 10, 100, 150)
 mumps_Nreps_eval = switch(run_level, 2, 10, 20)
-mumps_Nreps_local = switch(run_level, 10, 20, 40)
-mumps_Nreps_global = switch(run_level, 10, 20, 100)
-mumps_Nsim = switch(run_level, 50, 100, 500)
+mumps_Nreps_local = switch(run_level, 10, 30, 40)
+mumps_Nreps_global = switch(run_level, 10, 60, 100)
+mumps_Nsim = switch(run_level, 50, 70, 100)
 ```
 
 ```{r local_search, message=FALSE, warning=FALSE}
 cl = makeCluster(8)
 registerDoParallel(cl)
-registerDoRNG(3899882)
+registerDoRNG(2021531)
 mifs_local = foreach(i = 1:mumps_Nreps_local,
                      .packages = c("pomp", "tidyverse"),
                      .combine = c) %dopar% { 
@@ -327,26 +328,11 @@ stopCluster(cl)
 
 Here's our results, we show them in the table and plot the figure below.
 
-##### Table
-
-```{r local_tab, message=FALSE, warning=FALSE}
-r_local = t(sapply(mifs_local, coef)) %>%
-  as_tibble() %>%
-  bind_cols(tibble(logLik = lik_local[,1],
-                   logLik_se = lik_local[,2])
-  ) %>%
-  arrange(-logLik) %>%
-  head(10)
-cap_tab1 = paste( 
-  "**Table 1.** *Parameters of top ten models of local maximization of likelihood function.*",
-  "Observations are ordered by Log likelihood."
-)
-r_local %>%
-  knitr::kable(digits = 3,
-               caption = cap_tab1)
-```
-
 ##### Figure
+
+We obtain some diagnostic plots now. There is considerable variability mainly due to the poorness of our starting guess, but what is obvious is that the likelihood eventually increases as the iterations proceed, and seems to converge after several iterations. And, the stochasticity may also be caused by the Monte Carlo algorithm itself.
+
+In terms of parameters, $b_{1}$, $b_{2}$, $\phi$, $\rho$ all have a clear trend of convergence, but $\eta$ moves with high variability.
 
 ```{r local_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig5}
 cap_fig5 = paste( 
@@ -369,9 +355,84 @@ mifs_local %>%
              scales = "free_y")
 ```
 
+##### Table
+
+The likelihood approximation generated by the final filtering iteration may not be that reliable for multiple reasons, so same as what we did in the class, we use replicated particle filters to evaluate both likelihood and standard error again at each point estimate.
+
+The results are tabulated below.
+
+Although the likelihood of these models are quite close, we can still find that the parameters and standard error vary from case to case, but roughly on an acceptable scale.
+
+```{r local_tab, message=FALSE, warning=FALSE}
+r_local = t(sapply(mifs_local, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_local[,1],
+                   logLik_se = lik_local[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  head(10)
+cap_tab1 = paste( 
+  "**Table 1.** *Parameters of top ten models of local maximization of likelihood function.*",
+  "Observations are ordered by Log likelihood."
+)
+r_local %>%
+  knitr::kable(digits = 3,
+               caption = cap_tab1)
+```
+
+##### Geometry: Pairwise relation
+
+The sampling is too sparse to give a clear picture, and there seems to be no clear patterns between these parameters.
+
+```{r local_fig_pair, fig.cap=cap_fig6, message=FALSE, warning=FALSE}
+cap_fig6 = paste( 
+  "**Figure 6.** *Pairwaise relations between parameters*",
+  "Local search."
+)
+pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
+      data = r_local, pch = 16)
+```
+
+#### Local fit
+
+The local maximization of likelihood function yields several combination of parameters, as we tabulated them in the above table. Now we select the parameters that corresponds to the largest likelihood to fit our model, and simulate the data to see how well the fit is going to be.
+
+```{r local_fit, message=FALSE, warning=FALSE, fig.cap=cap_fig7}
+params_name = c("b1", "b2", "Phi", "rho", "eta")
+local_params = r_local[1,]
+best_local = unlist(c(local_params[params_name], mumps_fixed_params))
+
+set.seed(2021531)
+mod_local = mumpSEIR %>%
+  simulate(params = best_local,
+           nsim = 1,
+           format = "data.frame",
+           include.data = TRUE)
+
+cap_fig7 = paste( 
+  "**Figure 7.** *One simulation of data.*",
+  "Parameters are selected from the best local search."
+)
+
+mod_local %>%
+  ggplot(aes(x = week,
+             y = cases,
+             group = .id,
+             color = .id=="data")
+  ) +
+  geom_line() +
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
+```
+
+The plot suggests that our current model is much better than the initial one, as it can describe the characteristics that simple SIR model can not.
+
 #### Global maximization of likelihood {.tabset .tabset-fade .tabset-pills}
 
-```{r global_search}
+Local maximization of likelihood function may already improves model a lot, but global maximization is still of significant importance here, since the dimension of our parameter space is large, our local search is certainly not enough to cover the majority of points.
+
+```{r global_search, message=FALSE, warning=FALSE}
 mumps_box = rbind(
   b1 = c(0,5), b2 = c(0,5), Phi = c(0, 2*pi),
   eta = c(0,0.10), rho = c(0, 0.9)
@@ -410,6 +471,46 @@ lik_global = foreach(i = 1:mumps_Nreps_global,
 stopCluster(cl)
 ```
 
+##### Figure
+
+The global maximization of likelihood function yields rather interesting plots here. Different starting points tends to behave differently, and the convergence values actually vary from case to case. For different starting values, the values of $b_{1}$,$b_{2}$,$\eta$,$\phi$ tends to be stable ever since the first iteration, but $\rho$ has a trend of convergence, although it seems to diverge into two directions because of distinct starting values.
+
+```{r global_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig9}
+cap_fig9 = paste( 
+  "**Figure 9.** *Values of parameters corresponding to each global iteration*",
+  "Starting value is randomly selected."
+)
+
+mifs_global %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x = iteration,
+             y = value,
+             group = L1,
+             color = factor(L1)
+  )
+  )+
+  geom_line()+
+  guides(color = FALSE)+
+  facet_wrap(~variable,
+             scales = "free_y")
+```
+
+The shape of log likelihood is somehow like a cliff, and it can be explained by the bad choices of starting parameters. Note that, this kind of behavior actually is likely to happen when the dimension of parameter space increases. The sparsity nature means that a thorough search is computationally expensive, since basically our algorithm is using **Uniform distribution** to sample parameters from the parameter space. So your starting point is very likely to be away from the optimal point, this is why some likelihood is so low at the first few iterations and then suddenly increase dramatically. The [plot](#ref)$^{[7]}$ below illustrates the sparsity of neighborhood of one point in a high dimensional space.
+
+```{r sparsity, fig.align = 'center', fig.cap = cap_fig8, out.width="80%"}
+cap_fig8 = paste(
+  "**Figure 8.** *The curse of dimensionality is well illustrated by a subcubical
+neighborhood for uniform data in a unit cube.*",
+"The figure on the right shows the side-length of the subcube needed to capture a fraction r of the volume of the data, for different dimensions p. In ten dimensions we need to cover 80% of the range
+of each coordinate to capture 10% of the data."
+)
+Sparsity = sprintf('%s/sparsity.png', path)
+knitr::include_graphics(Sparsity)
+```
+
+So with limited computational power, it is unlikely for us to cover all the points in the parameter space, but the global attempts here are still worth trying because it provides us with some other models which have quite different parameters but share a roughly same value of log likelihood(*as showed in the Table*).
+
 ##### Table
 
 ```{r global_tab, message=FALSE, warning=FALSE}
@@ -429,37 +530,66 @@ r_global %>%
                caption = cap_tab2)
 ```
 
-##### Figure
+##### Geometry: Pairwise relation
 
-```{r global_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig6}
-cap_fig6 = paste( 
-  "**Figure 6.** *Values of parameters corresponding to each global iteration*",
-  "Starting value is randomly selected."
+A trade-off effect can be found between $b_{1}$ and $\eta$, this may form a ridge on the likelihood surface.
+
+```{r global_fig_pair, fig.cap=cap_fig10, message=FALSE, warning=FALSE}
+cap_fig10 = paste( 
+  "**Figure 10.** *Pairwaise relations between parameters*",
+  "Global search."
 )
-
-mifs_global %>%
-  traces() %>%
-  melt() %>%
-  ggplot(aes(x = iteration,
-             y = value,
-             group = L1,
-             color = factor(L1)
-  )
-  )+
-  geom_line()+
-  guides(color = FALSE)+
-  facet_wrap(~variable,
-             scales = "free_y")
+pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
+      data = r_global, pch = 16)
 ```
 
-This link could have some useful general information, but you should also check CDC and other sites for mumps info: https://www.cdc.gov/mmwr/preview/mmwrhtml/mm5513a3.htm
+### Model suggested by Global search
 
+Now, we use the parameters suggested by the global search to fit our model. Then, we plot it below. The results of simulation with fit parameters looks pretty promising.
 
-https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF
-According to michigan.gov, the population of Michigan only increased by about 2% from the year 1970 to the year 1974. I would argue that that's a small enough change that we can approximate the demographics as constant.
+```{r global_mod, message=FALSE, warning=FALSE}
+global_params = r_global[1,]
+best_global = unlist(c(global_params[params_name], mumps_fixed_params))
+set.seed(2021531)
 
-vaccination rate info: https://www.statista.com/statistics/385577/mmr-vaccination-rate-among-us-children-aged-19-35-months/
+mod_global = mumpSEIR %>%
+  simulate(params = best_global,
+           nsim = 1,
+           format = "data.frame",
+           include.data = TRUE)
+```
 
-better vaccination rate info: https://www.cdc.gov/vaccines/pubs/pinkbook/downloads/appendices/g/coverage.pdf
+```{r global_plot, fig.cap=cap_fig11, message=FALSE, warning=FALSE}
+cap_fig11 = paste( 
+  "**Figure 11.** *One simulation of data.*",
+  "Parameters are selected from the best global search."
+)
+mod_global %>%
+  ggplot(aes(x = week,
+             y = cases,
+             group = .id,
+             color = .id=="data")
+  ) +
+  geom_line() +
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
+```
 
-https://kingaa.github.io/pomp/vignettes/oaxaca.html
+## Conclusion
+
+## References {#ref}
+
+[1] Mumps Epidemic, https://www.cdc.gov/mmwr/preview/mmwrhtml/mm5513a3.htm
+
+[2] Epidemiology and Prevention of Vaccine-Preventable Diseases, Chapter 15:Mumps, https://www.cdc.gov/vaccines/pubs/pinkbook/mumps.html
+
+[3] Project Tycho: Contagious Diseases, https://www.kaggle.com/pitt/contagious-diseases
+
+[4] Vaccine Coverage Levels – United States, 1962-2009, https://www.cdc.gov/vaccines/pubs/pinkbook/downloads/appendices/g/coverage.pdf
+
+[5] MDHHS Vaccine-Preventable Disease Mumps Investigation Guidelines -Mumps, https://www.michigan.gov/documents/mdch/Mumps_388978_7.pdf
+
+[6] MICHIGAN AND U.S. POPULATION, 1970-2019, https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF
+
+[7] The Elements of Statistical Learning Data Mining, Inference, and Prediction (2nd edition) by Trevor Hastie, Robert Tibshirani, Jerome Friedman, page 23.
