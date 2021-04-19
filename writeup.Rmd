@@ -49,7 +49,7 @@ knitr::include_graphics(mumps_LOGO)
 
 So in this report, we are trying to find the transmission pattern of mumps in the *1970s*, and specifically, we want to examine the following question:
 
->  Whether or not mumps cases in the 1970s can be well modeled by an SEIR pomp model?
+>  Whether or not mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model?
 
 ### Data Description
 
@@ -311,6 +311,7 @@ stopCluster(cl)
 
 cl = makeCluster(8)
 registerDoParallel(cl)
+registerDoRNG(2021531)
 lik_local = foreach(i = 1:mumps_Nreps_local,
                      .packages = c("pomp", "tidyverse"),
                      .combine=rbind) %dopar% {
@@ -402,7 +403,7 @@ params_name = c("b1", "b2", "Phi", "rho", "eta")
 local_params = r_local[1,]
 best_local = unlist(c(local_params[params_name], mumps_fixed_params))
 
-set.seed(2021531)
+set.seed(643345567)
 mod_local = mumpSEIR %>%
   simulate(params = best_local,
            nsim = 1,
@@ -426,7 +427,7 @@ mod_local %>%
        color = "Original Data")
 ```
 
-The plot suggests that our current model is much better than the initial one, as it can describe the characteristics that simple SIR model can not.
+The plot suggests that our current model is much better than the initial one, as it can describe the seasonal characteristics that simple SIR model can not.
 
 #### Global maximization of likelihood {.tabset .tabset-fade .tabset-pills}
 
@@ -440,6 +441,7 @@ mumps_box = rbind(
 
 cl = makeCluster(8)
 registerDoParallel(cl)
+registerDoRNG(2021531)
 mifs_global = foreach(i = 1:mumps_Nreps_global,
                        .packages = 'pomp', 
                        .combine = c) %dopar%{
@@ -455,6 +457,7 @@ stopCluster(cl)
 
 cl = makeCluster(8)
 registerDoParallel(cl)
+registerDoRNG(2021531)
 lik_global = foreach(i = 1:mumps_Nreps_global,
                      .packages = 'pomp',
                      .combine = rbind) %dopar% {
@@ -550,8 +553,7 @@ Now, we use the parameters suggested by the global search to fit our model. Then
 ```{r global_mod, message=FALSE, warning=FALSE}
 global_params = r_global[1,]
 best_global = unlist(c(global_params[params_name], mumps_fixed_params))
-set.seed(2021531)
-
+set.seed(238765234)
 mod_global = mumpSEIR %>%
   simulate(params = best_global,
            nsim = 1,
@@ -577,6 +579,14 @@ mod_global %>%
 ```
 
 ## Conclusion
+
+Think back to the question we considered at the beginning of the report, now we can say that mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model, and the key to do this is to add a seasonal contact rate. Parameters selection can be time-consuming, the fit may be not that perfect due to randomness of simulation, but what really matters is that the seasonality have already been captured by this model, and usually our model only differs by a constant from the orginal data.
+
+## Limitation
+
+- The curse of dimension makes it computationally expensive to maximize the likelihood function globally.
+- The problem of depletion of susceptible still exists, and our model may not work if the time series is sampled over a long time span, like 10+ years.
+- The model can be sensitive to the value of parameters, a bad choice of parameters usually results in *NaN* values of cases, causing *-inf* log likelihood
 
 ## References {#ref}
 
