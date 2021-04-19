@@ -23,7 +23,7 @@ Whether or not mumps cases of Michigan in the 1970s can be well modeled by an SE
 [Project Tycho: Mumps](https://www.kaggle.com/pitt/contagious-diseases?select=mumps.csv)
 
 
-Variable of interest
+Variables of interest
 |  Variable               | Description                                         |
 | ----------------------- | ----------------------------------------------------|
 | `week` | Index variable and takes week as a unit of measurement of time                 |
