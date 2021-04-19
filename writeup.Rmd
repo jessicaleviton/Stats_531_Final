@@ -290,41 +290,39 @@ mumps_Nsim = switch(run_level, 50, 70, 100)
 ```
 
 ```{r local_search, message=FALSE, warning=FALSE}
-cl = makeCluster(8)
-registerDoParallel(cl)
+registerDoParallel()
 registerDoRNG(2021531)
-mifs_local = foreach(i = 1:mumps_Nreps_local,
-                     .packages = c("pomp", "tidyverse"),
-                     .combine = c) %dopar% { 
-  mumpSEIR %>%
-    mif2(
-      params = params,
-      Np = mumps_Np, 
-      Nmif = mumps_Nmif,
-      cooling.fraction.50 = 0.5,
-      rw.sd = rw.sd(b1 = 0.02, b2 = 0.02, Phi = 0.02,
-                    rho = 0.02, eta = ivp(0.02)
-                    )
-    )
-}
-stopCluster(cl)
 
-cl = makeCluster(8)
-registerDoParallel(cl)
-registerDoRNG(2021531)
-lik_local = foreach(i = 1:mumps_Nreps_local,
-                     .packages = c("pomp", "tidyverse"),
-                     .combine=rbind) %dopar% {
-  logmeanexp(
-    replicate(mumps_Nreps_eval,
-              logLik(pfilter(mumpSEIR,
-                             params =  coef(mifs_local[[i]]),
-                             Np = mumps_Np)
-                     )
-              ),
-    se = TRUE)
-}
-stopCluster(cl)
+stew('results/local.rda', {
+  mifs_local = foreach(i = 1:mumps_Nreps_local,
+                      .packages = c("pomp", "tidyverse"),
+                      .combine = c) %dopar% { 
+    mumpSEIR %>%
+      mif2(
+        params = params,
+        Np = mumps_Np, 
+        Nmif = mumps_Nmif,
+        cooling.fraction.50 = 0.5,
+        rw.sd = rw.sd(b1 = 0.02, b2 = 0.02, Phi = 0.02,
+                      rho = 0.02, eta = ivp(0.02)
+                      )
+      )
+  }
+
+  lik_local = foreach(i = 1:mumps_Nreps_local,
+                      .packages = c("pomp", "tidyverse"),
+                      .combine=rbind) %dopar% {
+    logmeanexp(
+      replicate(mumps_Nreps_eval,
+                logLik(pfilter(mumpSEIR,
+                              params =  coef(mifs_local[[i]]),
+                              Np = mumps_Np)
+                      )
+                ),
+      se = TRUE)
+  }
+})
+
 ```
 
 Here's our results, we show them in the table and plot the figure below.
@@ -439,39 +437,36 @@ mumps_box = rbind(
   eta = c(0,0.10), rho = c(0, 0.9)
 )
 
-cl = makeCluster(8)
-registerDoParallel(cl)
-registerDoRNG(2021531)
-mifs_global = foreach(i = 1:mumps_Nreps_global,
-                       .packages = 'pomp', 
-                       .combine = c) %dopar%{
-  mif2(mifs_local[[1]],
-       params = c(apply(mumps_box,
-                        1,
-                        function(x) runif(1, x[1], x[2])),
-                  mumps_fixed_params
-                  )
-       )
-}
-stopCluster(cl)
 
-cl = makeCluster(8)
-registerDoParallel(cl)
+registerDoParallel()
 registerDoRNG(2021531)
-lik_global = foreach(i = 1:mumps_Nreps_global,
-                     .packages = 'pomp',
-                     .combine = rbind) %dopar% {
-  logmeanexp(
-    replicate(mumps_Nreps_eval, 
-              logLik(pfilter(mumpSEIR,
-                             params = coef(mifs_global[[i]]),
-                             Np = mumps_Np)
-                     )
-              ),
-    se = TRUE
+stew('results/global.rda', {
+  mifs_global = foreach(i = 1:mumps_Nreps_global,
+                        .packages = 'pomp', 
+                        .combine = c) %dopar%{
+    mif2(mifs_local[[1]],
+        params = c(apply(mumps_box,
+                         1,
+                         function(x) runif(1, x[1], x[2])),
+                   mumps_fixed_params
+                   )
+        )
+  }
+
+  lik_global = foreach(i = 1:mumps_Nreps_global,
+                      .packages = 'pomp',
+                      .combine = rbind) %dopar% {
+    logmeanexp(
+      replicate(mumps_Nreps_eval, 
+                logLik(pfilter(mumpSEIR,
+                              params = coef(mifs_global[[i]]),
+                              Np = mumps_Np)
+                      )
+                ),
+      se = TRUE
     )
-}
-stopCluster(cl)
+  }
+})
 ```
 
 ##### Figure
