@@ -7,7 +7,7 @@ Click [here](http://htmlpreview.github.io/?https://github.com/jessicaleviton/Sta
 Using pomp package and SEIR model to investigate the pattern of mumps(a contagious disease).
 
 ### Research Question
-Whether or not mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model? 
+Can mumps cases of Michigan in the 1970s be well modeled by an SEIR pomp model?
 
 ### Group Members
 - Jessica Leviton
