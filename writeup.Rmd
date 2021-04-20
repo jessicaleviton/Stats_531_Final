@@ -703,7 +703,7 @@ rho_ci %>%
 
 ## Conclusion
 
-Think back to the question we considered at the beginning of the report, now we can say that mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model, and the key to do this is to add a seasonal contact rate. Parameters selection can be time-consuming, the fit may be not that perfect due to randomness of simulation, but what really matters is that the seasonality have already been captured by this model, and usually our model only differs by a constant from the original data.
+Thinking back to the question we considered at the beginning of the report, we can now can say that mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model, and the key to do this is to add a seasonal contact rate. Parameters selection can be time-consuming, the fit may be not that perfect due to randomness of simulation, but what really matters is that the seasonality have already been captured by this model, and usually our model only differs by a constant from the original data.
 
 ## Limitations
 
