@@ -1,7 +1,7 @@
 ## Stats531 Final Project Group 8 subgroup 1
 
 ### Report
-Click [here](https://github.com/jessicaleviton/Stats_531_Final/blob/main/writeup.html) to see our latest version of write-up
+Click [here](http://htmlpreview.github.io/?https://github.com/jessicaleviton/Stats_531_Final/blob/main/writeup.html) to see our latest version of write-up
 
 ### Topic
 Using pomp package and SEIR model to investigate the pattern of mumps(a contagious disease).
