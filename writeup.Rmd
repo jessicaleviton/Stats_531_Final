@@ -497,9 +497,9 @@ stew('results/global.rda', {
 
 The global maximization of likelihood function yields rather interesting plots here. Different starting points tends to behave differently, and the convergence values actually vary from case to case. For different starting values, the values of $b_{1}$,$b_{2}$,$\eta$,$\phi$ tends to be stable ever since the first iteration, but $\rho$ has a trend of convergence, although it seems to diverge into two directions because of distinct starting values.
 
-```{r global_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig9}
-cap_fig9 = paste( 
-  "**Figure 9.** *Values of parameters corresponding to each global iteration*",
+```{r global_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig8}
+cap_fig8 = paste( 
+  "**Figure 8.** *Values of parameters corresponding to each global iteration*",
   "Starting value is randomly selected."
 )
 
@@ -520,9 +520,9 @@ mifs_global %>%
 
 The shape of log likelihood is somehow like a cliff, and it can be explained by the bad choices of starting parameters. Note that, this kind of behavior actually is likely to happen when the dimension of parameter space increases. The sparsity nature means that a thorough search is computationally expensive, since basically our algorithm is using **Uniform distribution** to sample parameters from the parameter space. So your starting point is very likely to be away from the optimal point, this is why some likelihood values are so low at the first few iterations and then suddenly increase dramatically. The [plot](#ref)$^{[7]}$ below illustrates the sparsity of the neighborhood of one point in a high dimensional space.
 
-```{r sparsity, fig.align = 'center', fig.cap = cap_fig8, out.width="80%"}
-cap_fig8 = paste(
-  "**Figure 8.** *The curse of dimensionality is well illustrated by a subcubical
+```{r sparsity, fig.align = 'center', fig.cap = cap_fig10, out.width="80%"}
+cap_fig10 = paste(
+  "**Figure 10.** *The curse of dimensionality is well illustrated by a subcubical
 neighborhood for uniform data in a unit cube.*",
 "The figure on the right shows the side-length of the subcube needed to capture a fraction r of the volume of the data, for different dimensions p. In ten dimensions we need to cover 80% of the range
 of each coordinate to capture 10% of the data."
@@ -556,9 +556,9 @@ r_global %>%
 
 A trade-off effect can be found between $b_{1}$ and $\eta$, this may form a ridge on the likelihood surface.
 
-```{r global_fig_pair, fig.cap=cap_fig10, message=FALSE, warning=FALSE}
-cap_fig10 = paste( 
-  "**Figure 10.** *Pairwaise relations between parameters*",
+```{r global_fig_pair, fig.cap=cap_fig9, message=FALSE, warning=FALSE}
+cap_fig9 = paste( 
+  "**Figure 9.** *Pairwaise relations between parameters*",
   "Global search."
 )
 pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
@@ -656,7 +656,7 @@ results = foreach(guess = iter(guesses, "row"),
 
 Based on the information given by CDC, we can assume that $\rho<0.5$. So we sampled $\rho$ from $Uniform(0,0.5)$, and then constructed the profile likelihood by maximizing the likelihood function over all other parameters. The figure below illustrate the reliable confidence interval of reporting rate $\rho$, and we place the exact value in the table below.
 
-```{r profile_plot, messgae=FALSE, warning=FALSE}
+```{r profile_plot, messgae=FALSE, warning=FALSE, fig.cap=cap_fig12}
 maxloglik = max(results$logLik, na.rm=TRUE)
 ci_cutoff = maxloglik - 0.5 * qchisq(df = 1, p = 0.95)
 cap_fig12 = paste( 
