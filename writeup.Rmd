@@ -3,7 +3,7 @@ title: "Stats 531, W21, Final Project"
 author:
   - Jessica Leviton, leviton@umich.edu
   - Hongfan Chen, chenhf@umich.edu
-date: "`r format.Date(Sys.Date(), '%B %d, %Y')`"
+date: April 20, 2021
 output: 
   html_document:
     toc: true
@@ -129,6 +129,8 @@ And as we pointed out, the contact rate must vary with time, so we define
 $$\beta = \exp\left\{b_{2}cos\left(\frac{2\pi t}{52}-\phi\right)+b_{1}\right\}$$
 Here number **52** represents the 52 weeks in a year (our proposed period of seasonality), and $\phi$ is the original phase, $b_{2}$ is usually called the amplitude, while $b_{1}$ is a constant indicating the mean level of contact rate.
 
+Note that, we still use **binomial** process to be our measurement model.
+
 ## Implementation
 
 ### Building the model
@@ -252,9 +254,11 @@ We choose starting values to be
 $$b_{1} = 1, b_{2} = 1, \phi = 0.1, \rho = 0.8, \eta = 0.0216, N= 8881826, \mu_{EI} = 0.412, \mu_{IR} = 0.714$$
 Our values for $N$, $\mu_{EI}$, and $\mu_{IR}$ are held constant and are defined by the population of Michigan, approximate incubation period, and approximate infectious period as previously discussed.
 
-The starting value of our remaining variables is randomly selected to examine the feasibility of our model. Below we plot ten simulations of our SEIR model, along with the original time series. We see that the fit is really poor. This might be caused by a bad choice of parameters.
+The starting value of our remaining variables is randomly selected to examine the feasibility of our model. Below we plot ten simulations of our SEIR model, along with the original time series. We see that the fit is really poor, while part of the values are missing.
 
-So we now continue our investigation by iterated filtering and find the best parameters by maximizing the likelihood function.
+This might be caused by a bad choice of parameters. Since we are using binomial process as our measurement, bounded support of binomial distribution requires that the observed reports should not exceed latent cases. A bad choice of parameters can break this requirement and thus results in missing values.
+
+So we now continue to improve our fit by iterated filtering and find the best parameters by maximizing the likelihood function.
 
 ```{r fit_1, fig.cap = cap_fig4, message=FALSE, warning=FALSE}
 cap_fig4 = paste( 
@@ -297,11 +301,14 @@ mumps_Nsim = switch(run_level, 50, 70, 100)
 
 
 stew('results/local.rda', {
-  registerDoParallel()
+  registerDoParallel(8)
   registerDoRNG(2021531)
   mifs_local = foreach(i = 1:mumps_Nreps_local,
                       .packages = c("pomp", "tidyverse"),
-                      .combine = c) %dopar% { 
+                      .combine = c,
+                      .export = c("mumpSEIR","params","mumps_Np",
+                                 "mumps_Nreps_eval", "mumps_Nmif")
+                      ) %dopar% { 
     mumpSEIR %>%
       mif2(
         params = params,
@@ -314,11 +321,14 @@ stew('results/local.rda', {
       )
   }
 
-  registerDoParallel()
+  registerDoParallel(8)
   registerDoRNG(2021531)
   lik_local = foreach(i = 1:mumps_Nreps_local,
                       .packages = c("pomp", "tidyverse"),
-                      .combine = rbind) %dopar% {
+                      .combine = rbind,
+                      .export = c("mumpSEIR", "params",
+                                 "mumps_Np", "mumps_Nreps_eval")
+                      ) %dopar% {
     logmeanexp(
       replicate(mumps_Nreps_eval,
                 logLik(pfilter(mumpSEIR,
@@ -449,7 +459,10 @@ stew('results/global.rda', {
   registerDoRNG(2021531)
   mifs_global = foreach(i = 1:mumps_Nreps_global,
                         .packages = 'pomp', 
-                        .combine = c) %dopar%{
+                        .combine = c,
+                        .export = c("mifs_local", "mumps_box",
+                                  "mumps_fixed_params")
+                        ) %dopar%{
     mif2(mifs_local[[1]],
         params = c(apply(mumps_box,
                          1,
@@ -462,8 +475,11 @@ stew('results/global.rda', {
   registerDoParallel()
   registerDoRNG(2021531)
   lik_global = foreach(i = 1:mumps_Nreps_global,
-                      .packages = 'pomp',
-                      .combine = rbind) %dopar% {
+                       .packages = 'pomp',
+                       .combine = rbind,
+                       .export = c("mumps_Nreps_eval",
+                                   "mumpSEIR", "mumps_Np")
+                     ) %dopar% {
     logmeanexp(
       replicate(mumps_Nreps_eval, 
                 logLik(pfilter(mumpSEIR,
@@ -583,6 +599,108 @@ mod_global %>%
        color = "Original Data")
 ```
 
+### Profile likelihood for Parameter Rho
+
+According to CDC, before the U.S. mumps vaccination program started in 1967, about 186,000 cases were reported each year, but the actual number of cases was likely much higher due to underreporting. So the reporting rate might be low during those years. One may be interested in the actual level of reporting rate, so we are going to build a profile likelihood for $\rho$, and then construct a confidence interval to see if we can find a reliable estimation of reporting rate.
+
+```{r profile, warning=FALSE, message=FALSE}
+## Profile likelihood for rho: ------------------------------------------------
+box = t(sapply(mifs_global, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_global[,1],
+                   logLik_se = lik_global[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  drop_na() %>%
+  filter(logLik > max(logLik) - 10, logLik_se < 2) %>%
+  sapply(range)
+
+guesses = profile_design(
+  rho = seq(0.01, 0.50, length = 30),
+  lower = box[1, c("b1", "b2", "Phi", "eta")],
+  upper = box[2, c("b1", "b2", "Phi", "eta")],
+  nprof = 15, type = "runif"
+)
+
+stew('results/profile.rda', {
+
+registerDoParallel(8)
+registerDoRNG(2021531)
+results = foreach(guess = iter(guesses, "row"),
+                  .packages = c("pomp", "tidyverse"),
+                  .combine = rbind,
+                  .export = c("mumps_fixed_params", "mifs_local")
+                  ) %dopar% {
+  mf = mifs_local[[1]] %>%
+    mif2(params = c(unlist(guess),
+                    mumps_fixed_params),
+         rw.sd = rw.sd(b1 = 0.02, b2 = 0.02,
+                       Phi = 0.02, eta = ivp(0.02))
+    ) %>%
+    mif2(Nmif = 40,
+         cooling.fraction.50 = 0.3)
+  ll = replicate(10, mf %>%
+                   pfilter(Np = 1000) %>%
+                   logLik()
+                 ) %>%
+    logmeanexp(se = TRUE)
+  mf %>% 
+    coef() %>% 
+    bind_rows() %>%
+    bind_cols(logLik = ll[1],
+              logLik_se=ll[2]
+    )
+}}
+)
+```
+
+Based on the information given by CDC, we can assume that $\rho<0.5$. So we sampled $\rho$ from $Uniform(0,0.5)$, and then constructed the profile likelihood by maximizing the likelihood function over all other parameters. The figure below illustrate the reliable confidence interval of reporting rate $\rho$, and we place the exact value in the table below.
+
+```{r profile_plot, messgae=FALSE, warning=FALSE}
+maxloglik = max(results$logLik, na.rm=TRUE)
+ci_cutoff = maxloglik - 0.5 * qchisq(df = 1, p = 0.95)
+cap_fig12 = paste( 
+  "**Figure 12.** *Profile likelihood of reporting rate.*",
+  "Horizontal line respresents the 95% confidence bound."
+)
+results %>%
+  filter(is.finite(logLik)) %>%
+  mutate(rho = round(rho, 5)) %>%
+  group_by(rho) %>%
+  summarize(maxlogLik = max(logLik)) %>%
+  ggplot(aes(x = rho,
+             y = maxlogLik)
+  ) +
+  geom_point()+
+  geom_smooth(method = "loess",
+              span = 0.3
+  )+
+  geom_hline(color = "red",
+             yintercept = ci_cutoff
+  )+
+  lims(y = maxloglik-c(10,0))
+```
+
+The simulation actually tells us that any value of $\rho$ ranging from 11.14% to 14.52% should be considered reasonable. So the reporting rate is indeed quite low, but given the fact that many mumps patients recover completely within two weeks, and mumps is a self-limited disease, such a low reporting rate still makes sense.
+
+```{r, profile_tab, message=FALSE, warning=FALSE}
+rho_ci = results %>%
+  drop_na() %>%
+  filter(logLik > max(logLik) - 0.5 * qchisq(df = 1, p = 0.95)) %>%
+  summarize(min = min(rho),max = max(rho)) %>%
+  mutate(lower = sprintf("%.2f%%", 100 * min),
+         upper = sprintf("%.2f%%", 100 * max)) %>%
+  select(lower, upper)
+
+cap_tab3 = paste( 
+  "**Table 3.** *95% confidence interval of reporting rate.*",
+  "Numbers are rounded to 2 decimal places."
+)
+
+rho_ci %>%
+  knitr::kable(caption = cap_tab3)
+```
+
 ## Conclusion
 
 Think back to the question we considered at the beginning of the report, now we can say that mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model, and the key to do this is to add a seasonal contact rate. Parameters selection can be time-consuming, the fit may be not that perfect due to randomness of simulation, but what really matters is that the seasonality have already been captured by this model, and usually our model only differs by a constant from the original data.
@@ -591,7 +709,7 @@ Think back to the question we considered at the beginning of the report, now we 
 
 - The curse of dimension makes it computationally expensive to maximize the likelihood function globally.
 - The problem of depletion of the susceptible population still exists, and our model may not work if the time series is sampled over a long time span, like 10+ years. Similarly, since our model ignores demography, it is possible that our parameters are less accurate than might be ideal.
-- The model can be sensitive to the value of parameters, a bad choice of parameters usually results in *NaN* values of cases, causing *-inf* log likelihood
+- The model can be sensitive to the value of parameters, a bad choice of parameters usually results in *NaN* values of cases, causing *-inf* log likelihood.
 
 ## Author Contributions
 
