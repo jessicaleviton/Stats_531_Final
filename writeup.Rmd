@@ -41,7 +41,8 @@ suppressPackageStartupMessages({
 path = './'
 ## Figure 1
 cap_fig1 = paste(
-  "**Figure 1.** *Symptoms of Mumps.*"
+  "**Figure 1.** *Symptoms of Mumps.*",
+  "Image by *FirstCry Parenting* channel on Youtube."
 )
 mumps_LOGO = sprintf('%s/mumps.jpg', path)
 knitr::include_graphics(mumps_LOGO)
@@ -317,7 +318,7 @@ stew('results/local.rda', {
   registerDoRNG(2021531)
   lik_local = foreach(i = 1:mumps_Nreps_local,
                       .packages = c("pomp", "tidyverse"),
-                      .combine=rbind) %dopar% {
+                      .combine = rbind) %dopar% {
     logmeanexp(
       replicate(mumps_Nreps_eval,
                 logLik(pfilter(mumpSEIR,
@@ -549,7 +550,8 @@ pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
 ```
 
 ### Model suggested by Global search
- The best likelihoods seem to correspond to a low reporting rate ($\rho \sim 12\% $) and a small susceptible population ($\eta \sim 4-6\%$). For more detailed information about the parameters of the top ten models identified by our algorithm, see Table 2 above.
+
+ The best likelihoods seem to correspond to a low reporting rate $(\rho \sim 12\% )$ and a small susceptible population $(\eta \sim 4-6\%)$. For more detailed information about the parameters of the top ten models identified by our algorithm, see Table 2 above.
 
 Now, we use the parameters suggested by the global search to fit our model. Then, we plot it below. The results of simulation with fit parameters looks pretty promising.
 
@@ -593,7 +595,8 @@ Think back to the question we considered at the beginning of the report, now we 
 
 ## Author Contributions
 
-Jessica Leviton: I set up the local and global search algorithms, helped build and implement the SEIR model, and contributed to the writeup of this project.
+- Jessica Leviton: I set up the local and global search algorithms, helped build and implement the SEIR model, and contributed to the writeup of this project.
+- Hongfan Chen: I helped build the SEIR model, explained and justified the model output, and contributed to the writeup of this project. 
 
 ## References {#ref}
 
