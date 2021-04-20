@@ -284,3 +284,86 @@ mod_global %>%
   labs(x = "Weeks",
        y = "Reporting Cases",
        color = "Original Data")
+## ----------------------------------------------------------------------------
+## ------------------------ Profile Likelihood For Rho ------------------------
+## ----------------------------------------------------------------------------
+## Profile likelihood for rho: ------------------------------------------------
+box = t(sapply(mifs_global, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_global[,1],
+                   logLik_se = lik_global[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  drop_na() %>%
+  filter(logLik > max(logLik) - 10, logLik_se < 2) %>%
+  sapply(range)
+
+## Grid Search
+guesses = profile_design(
+  rho = seq(0.01, 0.50, length = 30),
+  lower = box[1, c("b1", "b2", "Phi", "eta")],
+  upper = box[2, c("b1", "b2", "Phi", "eta")],
+  nprof = 15, type = "runif"
+)
+
+stew('results/profile.rda', {
+  
+  registerDoParallel(8)
+  registerDoRNG(2021531)
+  results = foreach(guess = iter(guesses, "row"),
+                    .packages = c("pomp", "tidyverse"),
+                    .combine = rbind,
+                    .export = c("mumps_fixed_params", "mifs_local")
+  ) %dopar% {
+    mf = mifs_local[[1]] %>%
+      mif2(params = c(unlist(guess),
+                      mumps_fixed_params),
+           rw.sd = rw.sd(b1 = 0.02, b2 = 0.02,
+                         Phi = 0.02, eta = ivp(0.02))
+      ) %>%
+      mif2(Nmif = 40,
+           cooling.fraction.50 = 0.3)
+    ll = replicate(10, mf %>%
+                     pfilter(Np = 1000) %>%
+                     logLik()
+    ) %>%
+      logmeanexp(se = TRUE)
+    mf %>% 
+      coef() %>% 
+      bind_rows() %>%
+      bind_cols(logLik = ll[1],
+                logLik_se=ll[2]
+      )
+  }}
+)
+## remove the NaN values in the loglik: ---------------------------------------
+maxloglik = max(results$logLik, na.rm=TRUE)
+ci_cutoff = maxloglik - 0.5 * qchisq(df = 1, p = 0.95)
+
+## PLot with CI
+results %>%
+  filter(is.finite(logLik)) %>%
+  mutate(rho = round(rho, 5)) %>%
+  group_by(rho) %>%
+  summarize(maxlogLik = max(logLik)) %>%
+  ggplot(aes(x = rho,
+             y = maxlogLik)
+  ) +
+  geom_point()+
+  geom_smooth(method = "loess",
+              span = 0.3
+  )+
+  geom_hline(color = "red",
+             yintercept = ci_cutoff
+  )+
+  lims(y = maxloglik-c(10,0))
+
+## CI
+rho_ci = results %>%
+  drop_na() %>%
+  filter(logLik > max(logLik) - 0.5 * qchisq(df = 1, p = 0.95)) %>%
+  summarize(min = min(rho),max = max(rho)) %>%
+  mutate(lower = sprintf("%.2f%%", 100 * min),
+         upper = sprintf("%.2f%%", 100 * max)) %>%
+  select(lower, upper)
+
